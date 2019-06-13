@@ -50,12 +50,13 @@ PrintAndDisposeStream(
 	A_char				*stream_nameZ,
 	FILE 				*out,
     A_Time              sampleT,
-    AEGP_LayerStream    which_stream)
+    AEGP_LayerStream    which_stream,
+    A_long              layerWidth,
+    A_long              layerHeight)
 {
 	A_Err 				err = A_Err_NONE, err2;
 	AEGP_StreamType		stream_type;
 	A_long				num_kfsL;
-//    A_Time                sampleT = { 100, 100 };
 	AEGP_StreamValue	val;
 	AEGP_StreamValue	*sample_valP = &val;
 	A_char				unitsAC[AEGP_MAX_STREAM_UNITS_SIZE + 1];
@@ -73,8 +74,6 @@ PrintAndDisposeStream(
 
 		ERR(suites.StreamSuite2()->AEGP_GetStreamUnitsText(streamH, FALSE, unitsAC));
 		ERR(suites.KeyframeSuite3()->AEGP_GetStreamNumKFs(streamH, &num_kfsL));
-        
-        NSLog(@"============ %d =============", num_kfsL);
 		
 		if (!err && num_kfsL) {
 			A_Boolean pre_expressionB	=	TRUE;
@@ -92,21 +91,33 @@ PrintAndDisposeStream(
 				{
                     case AEGP_StreamType_ThreeD_SPATIAL:
                     case AEGP_StreamType_ThreeD:
-                        fprintf(out, "\t\tTime %1.2f X %1.2f %s Y %1.2f %s Z %1.2f %s",
-                                (A_FpLong)(sampleT.value) / (sampleT.scale),
-                                sample_valP->val.three_d.x,
-                                unitsAC,
-                                sample_valP->val.three_d.y,
-                                unitsAC,
-                                sample_valP->val.three_d.z,
-                                unitsAC);
+                        if (which_stream == AEGP_LayerStream_ANCHORPOINT || which_stream == AEGP_LayerStream_POSITION) {
+                            fprintf(out, "\t\tTime %1.2f X %1.2f Y %1.2f",
+                                    (A_FpLong)(sampleT.value) / (sampleT.scale),
+                                    sample_valP->val.three_d.x - layerWidth / 2,
+                                    sample_valP->val.three_d.y - layerHeight / 2);
+                        } else if (which_stream == AEGP_LayerStream_SCALE){
+                            fprintf(out, "\t\tTime %1.2f X %1.2f Y %1.2f",
+                                    (A_FpLong)(sampleT.value) / (sampleT.scale),
+                                    sample_valP->val.three_d.x / 100,
+                                    sample_valP->val.three_d.y / 100) ;
+                        }
                         break;
 					case AEGP_StreamType_TwoD_SPATIAL:
 					case AEGP_StreamType_TwoD:
-						fprintf(out, "\t\tTime %1.2f X %1.2f %s Y %1.2f %s", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.two_d.x, unitsAC, sample_valP->val.two_d.y, unitsAC);
+						fprintf(out, "\t\tTime %1.2f X %1.2f %s Y %1.2f %s",
+                                (A_FpLong)(sampleT.value) / (sampleT.scale),
+                                sample_valP->val.two_d.x,
+                                unitsAC,
+                                sample_valP->val.two_d.y,
+                                unitsAC);
 						break;		
 					case AEGP_StreamType_OneD:
-						fprintf(out, "\t\tTime %1.2f %1.2f %s", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.one_d, unitsAC);
+                        if (which_stream == AEGP_LayerStream_OPACITY) {
+                            fprintf(out, "\t\tTime %1.2f %1.2f", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.one_d / 100);
+                        } else if (which_stream == AEGP_LayerStream_ROTATION) {
+                            fprintf(out, "\t\tTime %1.2f %1.2f", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.one_d);
+                        }
 						break;		
 					case AEGP_StreamType_COLOR:				
 						fprintf(out, "\t\tTime %1.2f R %1.2f G %1.2f B %1.2f", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.color.redF, sample_valP->val.color.greenF, sample_valP->val.color.blueF);
@@ -229,58 +240,8 @@ A_Time				currT)
 		ERR(suites.LayerSuite5()->AEGP_GetLayerCurrentTime(layerH, AEGP_LTimeMode_LayerTime, &currT));
 		ERR(suites.EffectSuite2()->AEGP_GetLayerNumEffects(layerH, &num_effectsL));
         
-        A_Matrix4 transform;
-        const A_Time time = {0, 1};
-        ERR(suites.LayerSuite5()->AEGP_GetLayerToWorldXform(layerH, &time, &transform));
-        
-        A_Matrix4 transform1;
-        const A_Time time1 = {0, 1};
-        const A_Time time2 = {0, 1};
-        ERR(suites.LayerSuite5()->AEGP_GetLayerToWorldXformFromView(layerH, &time1, &time2, &transform1));
-        
-        AEGP_StreamVal    anchorpoint_stream_val;
-        ERR(suites.StreamSuite2()->AEGP_GetLayerStreamValue(layerH,
-                                                            AEGP_LayerStream_ANCHORPOINT,
-                                                            AEGP_LTimeMode_CompTime,
-                                                            &time,
-                                                            FALSE,
-                                                            &anchorpoint_stream_val,
-                                                            NULL));
-        AEGP_StreamVal    position_stream_val;
-        ERR(suites.StreamSuite2()->AEGP_GetLayerStreamValue(layerH,
-                                                            AEGP_LayerStream_POSITION,
-                                                            AEGP_LTimeMode_CompTime,
-                                                            &time,
-                                                            FALSE,
-                                                            &position_stream_val,
-                                                            NULL));
-        
-        AEGP_StreamVal    scale_stream_val;
-        ERR(suites.StreamSuite2()->AEGP_GetLayerStreamValue(layerH,
-                                                            AEGP_LayerStream_SCALE,
-                                                            AEGP_LTimeMode_CompTime,
-                                                            &time,
-                                                            FALSE,
-                                                            &scale_stream_val,
-                                                            NULL));
-        
-        AEGP_StreamVal    rotation_stream_val;
-        ERR(suites.StreamSuite2()->AEGP_GetLayerStreamValue(layerH,
-                                                            AEGP_LayerStream_ROTATION,
-                                                            AEGP_LTimeMode_CompTime,
-                                                            &time,
-                                                            FALSE,
-                                                            &rotation_stream_val,
-                                                            NULL));
-        
-        AEGP_StreamVal    opacity_stream_val;
-        ERR(suites.StreamSuite2()->AEGP_GetLayerStreamValue(layerH,
-                                                            AEGP_LayerStream_OPACITY,
-                                                            AEGP_LTimeMode_CompTime,
-                                                            &time,
-                                                            FALSE,
-                                                            &opacity_stream_val,
-                                                            NULL));
+        A_long layerWidth, layerHeight;
+        ERR(suites.ItemSuite6()->AEGP_GetItemDimensions(layerItemH, &layerWidth, &layerHeight));
 
 		fprintf(out, "%s\t%d: %s LayIn: %1.2f LayDur: %1.2f CompIn: %1.2f CompDur: %1.2f Curr: %1.2f Num Effects: %d\n", indent_stringAC, iL + 1, layer_nameAC,
 			(A_FpLong)(lay_inT.value) / (lay_inT.scale), (A_FpLong)(lay_durT.value) / (lay_durT.scale),
@@ -290,35 +251,35 @@ A_Time				currT)
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ANCHORPOINT, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT, layerWidth, layerHeight));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_POSITION, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION, layerWidth, layerHeight));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_SCALE, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE, layerWidth, layerHeight));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ROTATION, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ROTATION));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ROTATION, layerWidth, layerHeight));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_OPACITY, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_OPACITY));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_OPACITY, layerWidth, layerHeight));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
         
