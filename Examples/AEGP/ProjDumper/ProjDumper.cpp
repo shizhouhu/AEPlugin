@@ -49,7 +49,8 @@ PrintAndDisposeStream(
 	A_char				*indent_stringZ,
 	A_char				*stream_nameZ,
 	FILE 				*out,
-    A_Time              sampleT)
+    A_Time              sampleT,
+    AEGP_LayerStream    which_stream)
 {
 	A_Err 				err = A_Err_NONE, err2;
 	AEGP_StreamType		stream_type;
@@ -289,35 +290,35 @@ A_Time				currT)
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ANCHORPOINT, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_POSITION, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_SCALE, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ROTATION, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ROTATION));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_OPACITY, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_OPACITY));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
         
