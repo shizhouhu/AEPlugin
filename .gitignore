@@ -1,3 +1,6 @@
 # project user config related
 *.xcuserstate
+xcuserdata/
+*.xcuserdatad/
+xcshareddata/
 
