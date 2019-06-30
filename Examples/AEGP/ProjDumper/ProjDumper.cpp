@@ -32,6 +32,7 @@ Version		Change											Engineer	Date
 */
 
 #include "ProjDumper.h"
+#include "NvXmlUtils.h"
 
 static AEGP_Command	S_dump_proj_cmd = 0,
 						S_other_cmd = 0;
@@ -52,7 +53,9 @@ PrintAndDisposeStream(
     A_Time              sampleT,
     AEGP_LayerStream    which_stream,
     A_long              layerWidth,
-    A_long              layerHeight)
+    A_long              layerHeight,
+    NvXmlUtils          *xmlUtils,
+    NSXMLElement        *streamElement)
 {
 	A_Err 				err = A_Err_NONE, err2;
 	AEGP_StreamType		stream_type;
@@ -96,12 +99,27 @@ PrintAndDisposeStream(
                                     (A_FpLong)(sampleT.value) / (sampleT.scale),
                                     sample_valP->val.three_d.x - layerWidth / 2,
                                     sample_valP->val.three_d.y - layerHeight / 2);
+                            
+                            NSMutableDictionary *dict1 = [NSMutableDictionary new];
+                            [dict1 setObject:[NSString stringWithFormat:@"%d", int((A_FpLong)(sampleT.value) / (sampleT.scale) * 1000)] forKey:@"time"];
+                            [dict1 setObject:[NSString stringWithFormat:@"%1.2f", sample_valP->val.three_d.x - layerWidth / 2] forKey:@"anchorX"];
+                            [dict1 setObject:[NSString stringWithFormat:@"%1.2f", sample_valP->val.three_d.y - layerHeight / 2] forKey:@"anchorY"];
+                            NSXMLElement *element1 = [xmlUtils createLevel2ElementWith:@"key" attributes:dict1];
+                            [streamElement addChild:element1];
                         } else if (which_stream == AEGP_LayerStream_SCALE){
                             fprintf(out, "\t\tTime %1.2f X %1.2f Y %1.2f",
                                     (A_FpLong)(sampleT.value) / (sampleT.scale),
                                     sample_valP->val.three_d.x / 100,
                                     sample_valP->val.three_d.y / 100) ;
+                            
+                            NSMutableDictionary *dict1 = [NSMutableDictionary new];
+                            [dict1 setObject:[NSString stringWithFormat:@"%d", int((A_FpLong)(sampleT.value) / (sampleT.scale) * 1000)] forKey:@"time"];
+                            [dict1 setObject:[NSString stringWithFormat:@"%1.2f", sample_valP->val.three_d.x / 100] forKey:@"scaleX"];
+                            [dict1 setObject:[NSString stringWithFormat:@"%1.2f", sample_valP->val.three_d.y / 100] forKey:@"scaleY"];
+                            NSXMLElement *element1 = [xmlUtils createLevel2ElementWith:@"key" attributes:dict1];
+                            [streamElement addChild:element1];
                         }
+                        
                         break;
 					case AEGP_StreamType_TwoD_SPATIAL:
 					case AEGP_StreamType_TwoD:
@@ -115,8 +133,20 @@ PrintAndDisposeStream(
 					case AEGP_StreamType_OneD:
                         if (which_stream == AEGP_LayerStream_OPACITY) {
                             fprintf(out, "\t\tTime %1.2f %1.2f", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.one_d / 100);
+                            
+                            NSMutableDictionary *dict1 = [NSMutableDictionary new];
+                            [dict1 setObject:[NSString stringWithFormat:@"%d", int((A_FpLong)(sampleT.value) / (sampleT.scale) * 1000)] forKey:@"time"];
+                            [dict1 setObject:[NSString stringWithFormat:@"%1.2f", sample_valP->val.one_d / 100] forKey:@"value"];
+                            NSXMLElement *element1 = [xmlUtils createLevel2ElementWith:@"key" attributes:dict1];
+                            [streamElement addChild:element1];
                         } else if (which_stream == AEGP_LayerStream_ROTATION) {
                             fprintf(out, "\t\tTime %1.2f %1.2f", (A_FpLong)(sampleT.value) / (sampleT.scale), sample_valP->val.one_d);
+                            
+                            NSMutableDictionary *dict1 = [NSMutableDictionary new];
+                            [dict1 setObject:[NSString stringWithFormat:@"%d", int((A_FpLong)(sampleT.value) / (sampleT.scale) * 1000)] forKey:@"time"];
+                            [dict1 setObject:[NSString stringWithFormat:@"%1.2f", sample_valP->val.one_d] forKey:@"value"];
+                            NSXMLElement *element1 = [xmlUtils createLevel2ElementWith:@"key" attributes:dict1];
+                            [streamElement addChild:element1];
                         }
 						break;		
 					case AEGP_StreamType_COLOR:				
@@ -247,41 +277,61 @@ A_Time				currT)
 			(A_FpLong)(lay_inT.value) / (lay_inT.scale), (A_FpLong)(lay_durT.value) / (lay_durT.scale),
 			(A_FpLong)(comp_inT.value) / (comp_inT.scale), (A_FpLong)(comp_durT.value) / (comp_durT.scale),
 			(A_FpLong)(currT.value) / (currT.scale), num_effectsL);
-
+        
+        NvXmlUtils *xmlUtils = [NvXmlUtils new];
+        NSXMLDocument *xmlDoc = [xmlUtils createXMLDocument];
+        NSXMLElement *rootElement = [xmlUtils createRootElement];
+        NSXMLElement *anchorPointElement = [xmlUtils createLevel1Element:@"AnchorPoint"];
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ANCHORPOINT, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT, layerWidth, layerHeight));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT, layerWidth, layerHeight, xmlUtils, anchorPointElement));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
+        NSXMLElement *positionElement = [xmlUtils createLevel1Element:@"Position"];
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_POSITION, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION, layerWidth, layerHeight));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION, layerWidth, layerHeight, xmlUtils, positionElement));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
+        NSXMLElement *scaleElement = [xmlUtils createLevel1Element:@"Scale"];
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_SCALE, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE, layerWidth, layerHeight));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE, layerWidth, layerHeight, xmlUtils, scaleElement));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
+        NSXMLElement *rotationElement = [xmlUtils createLevel1Element:@"Rotation"];
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ROTATION, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ROTATION, layerWidth, layerHeight));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ROTATION, layerWidth, layerHeight, xmlUtils, rotationElement));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
 
+        NSXMLElement *opacityElement = [xmlUtils createLevel1Element:@"Opacity"];
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_OPACITY, &streamH));
         for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100/Frequency) {
             A_Time sampleT = {  i, 100 };
-            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_OPACITY, layerWidth, layerHeight));
+            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_OPACITY, layerWidth, layerHeight, xmlUtils, opacityElement));
         }
         ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
+        
+        [rootElement addChild:anchorPointElement];
+        [rootElement addChild:positionElement];
+        [rootElement addChild:scaleElement];
+        [rootElement addChild:rotationElement];
+        [rootElement addChild:opacityElement];
+        [xmlDoc addChild:rootElement];
+        
+        NSString *filePath = [NSHomeDirectory() stringByAppendingPathComponent:@"Test.xml"];
+        NSData *data = [xmlUtils formatXMLData:[xmlDoc XMLData]];
+        BOOL ret = [xmlUtils create:filePath data:data];
+        NSLog(@"testXML return: %d", ret);
         
 		ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_AUDIO, &streamH));
 //        ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out));
