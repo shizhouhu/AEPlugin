@@ -136,6 +136,45 @@ GetLayerTransferModeName(
     }
 }
 
+static void
+copyANSIStringIntoUTF16(
+                        const char* inputString,
+                        A_UTF16Char* destination,
+                        CFStringEncodings encodings)
+{
+#ifdef AE_OS_MAC
+    int length = strlen(inputString);
+    CFRange    range = {0, AEGP_MAX_PATH_SIZE};
+    range.length = length;
+    CFStringRef inputStringCFSR = CFStringCreateWithBytes(    kCFAllocatorDefault,
+                                                          reinterpret_cast<const UInt8 *>(inputString),
+                                                          length * sizeof(char),
+                                                          kCFStringEncodingGB_18030_2000,
+                                                          FALSE);
+    
+    NSInteger strLen = [(NSString *)inputStringCFSR length];
+    CFStringGetBytes(    inputStringCFSR,
+                     range,
+                     kCFStringEncodingUTF16,
+                     0,
+                     FALSE,
+                     reinterpret_cast<UInt8 *>(destination),
+                     strLen * (sizeof (A_UTF16Char)),
+                     NULL);
+    destination[strLen] = 0; // Set NULL-terminator, since CFString calls don't set it
+    CFRelease(inputStringCFSR);
+#endif
+}
+
+static int getUTF16StringLength(A_UTF16Char *string)
+{
+    int length = 0;
+    while (string[length]) {
+        length++;
+    }
+    return length;
+}
+
 static A_Err
 PrintAndDisposeStream(
                       AEGP_StreamRefH        streamH,
@@ -338,6 +377,7 @@ DumpComp(
     // 按comp输出文件
     A_char                item_nameAC[AEGP_MAX_ITEM_NAME_SIZE] = { '\0' };
     A_char                path_nameAC[AEGP_MAX_PROJ_NAME_SIZE + 16];        // so we can add "_Dump.txt"
+    A_UTF16Char           path_nameAC_utf16[AEGP_MAX_PROJ_NAME_SIZE + 16];        // so we can add "_Dump.txt"
     ERR(suites.ItemSuite6()->AEGP_GetItemName(itemH, item_nameAC));
 #ifdef AE_OS_WIN
     suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "C:\\Windows\\Temp\\");
@@ -346,8 +386,14 @@ DumpComp(
 #endif
     strcat(path_nameAC, item_nameAC);
     strcat(path_nameAC, "_Dump.txt");
+    
+    copyANSIStringIntoUTF16(path_nameAC, path_nameAC_utf16, kCFStringEncodingGB_18030_2000);
+    int length = getUTF16StringLength(path_nameAC_utf16);
+    NSString *string = [NSString stringWithCharacters:path_nameAC_utf16 length:length];
+    const char * filename = [string cStringUsingEncoding:NSUTF8StringEncoding];
+    
     FILE *compFile = NULL;
-    compFile = fopen(path_nameAC, "w");
+    compFile = fopen(filename, "w");
     if (compFile) {
         for (A_long iL = 0; !err && iL < num_layersL; iL++) {
             
@@ -489,125 +535,6 @@ DumpComp(
         fclose(compFile);
     }
     
-    /*
-     for (A_long iL = 0; !err && iL < num_layersL; iL++) {
-     AEGP_StreamRefH        streamH = NULL;
-     ERR(suites.LayerSuite5()->AEGP_GetCompLayerByIndex(compH, iL, &layerH));
-     ERR(suites.LayerSuite5()->AEGP_GetLayerName(layerH, layer_nameAC, 0));
-     if (layer_nameAC[0] == '\0')
-     {
-     ERR(suites.LayerSuite5()->AEGP_GetLayerSourceItem(layerH, &layerItemH));
-     ERR(suites.ItemSuite6()->AEGP_GetItemName(layerItemH, layer_nameAC));
-     }
-     ERR(suites.LayerSuite5()->AEGP_GetLayerInPoint(layerH, AEGP_LTimeMode_LayerTime, &lay_inT));
-     ERR(suites.LayerSuite5()->AEGP_GetLayerDuration(layerH, AEGP_LTimeMode_LayerTime, &lay_durT));
-     ERR(suites.LayerSuite5()->AEGP_GetLayerInPoint(layerH, AEGP_LTimeMode_CompTime, &comp_inT));
-     ERR(suites.LayerSuite5()->AEGP_GetLayerDuration(layerH, AEGP_LTimeMode_CompTime, &comp_durT));
-     ERR(suites.LayerSuite5()->AEGP_GetLayerCurrentTime(layerH, AEGP_LTimeMode_LayerTime, &currT));
-     ERR(suites.EffectSuite2()->AEGP_GetLayerNumEffects(layerH, &num_effectsL));
-     AEGP_ObjectType objectType;
-     ERR(suites.LayerSuite5()->AEGP_GetLayerObjectType(layerH, &objectType));
-     A_long compWidth, compHeight;
-     ERR(suites.CompSuite4()->AEGP_GetItemFromComp(compH, &compItemH));
-     ERR(suites.ItemSuite6()->AEGP_GetItemDimensions(compItemH, &compWidth, &compHeight));
-     ERR(suites.CompSuite4()->AEGP_GetCompFramerate(compH, &Frequency));
-     fprintf(out, "%s\t%d: %s LayIn: %1.2f LayDur: %1.2f CompIn: %1.2f CompDur: %1.2f Curr: %1.2f Num Effects: %d\n", indent_stringAC, iL + 1, layer_nameAC,
-     (A_FpLong)(lay_inT.value) / (lay_inT.scale), (A_FpLong)(lay_durT.value) / (lay_durT.scale),
-     (A_FpLong)(comp_inT.value) / (comp_inT.scale), (A_FpLong)(comp_durT.value) / (comp_durT.scale),
-     (A_FpLong)(currT.value) / (currT.scale), num_effectsL);
-     AEGP_LayerTransferMode transferMode;
-     ERR(suites.LayerSuite5()->AEGP_GetLayerTransferMode(layerH, &transferMode));
-     fprintf(out, "<track source=\":1\" width=\"%d\" height=\"%d\" clipStart=\"%d\" clipDuration=\"%d\" blendingMode=\"%s\">\n",
-     compWidth, compHeight,
-     int((A_FpLong)(lay_inT.value) / (lay_inT.scale) * MillisecondInSecond), int((A_FpLong)(lay_durT.value) / (lay_durT.scale) * MillisecondInSecond), GetLayerTransferModeName(transferMode.mode));
-     
-     // anchor point X
-     fprintf(out, "<animation paramName=\"anchorX\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ANCHORPOINT, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT, compWidth, compHeight, DimensionX, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // anchor point Y
-     fprintf(out, "<animation paramName=\"anchorY\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ANCHORPOINT, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ANCHORPOINT, compWidth, compHeight, DimensionY, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // position X
-     fprintf(out, "<animation paramName=\"transX\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_POSITION, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION, compWidth, compHeight, DimensionX, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // position Y
-     fprintf(out, "<animation paramName=\"transY\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_POSITION, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_POSITION, compWidth, compHeight, DimensionY, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // scale X
-     fprintf(out, "<animation paramName=\"scaleX\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_SCALE, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE, compWidth, compHeight, DimensionX, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // scale Y
-     fprintf(out, "<animation paramName=\"scaleY\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_SCALE, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_SCALE, compWidth, compHeight, DimensionY, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // rotation
-     fprintf(out, "<animation paramName=\"rotationZ\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_ROTATION, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_ROTATION, compWidth, compHeight, 0, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     // opacity
-     fprintf(out, "<animation paramName=\"opacity\">\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_OPACITY, &streamH));
-     for (int i = 0; i < (A_FpLong)(lay_durT.value) / (lay_durT.scale) * 100; i = i + 100 / Frequency) {
-     A_Time sampleT = { i, 100 };
-     ERR(PrintAndDisposeStream(streamH, "%s\t\t", indent_stringAC, stream_nameAC, out, sampleT, AEGP_LayerStream_OPACITY, compWidth, compHeight, 0, objectType));
-     }
-     ERR(suites.StreamSuite2()->AEGP_DisposeStream(streamH));
-     fprintf(out, "</animation>\n");
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_AUDIO, &streamH));
-     //        ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out));
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_MARKER, &streamH));
-     //        ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out));
-     AEGP_LayerFlags layer_flags = AEGP_LayerFlag_NONE;
-     ERR(suites.LayerSuite8()->AEGP_GetLayerFlags(layerH, &layer_flags));
-     if (layer_flags & AEGP_LayerFlag_TIME_REMAPPING)
-     {
-     ERR(suites.StreamSuite2()->AEGP_GetNewLayerStream(S_my_id, layerH, AEGP_LayerStream_TIME_REMAP, &streamH));
-     //            ERR(PrintAndDisposeStream(streamH, "%s\t\t%s", indent_stringAC, stream_nameAC, out));
-     };
-     DumpEffects(out, layerH, streamH);
-     fprintf(out, "</track>\n");
-     }
-     */
     return err;
 }
 
@@ -705,65 +632,6 @@ RecursiveDump(
     return err;
 }
 
-
-static A_Err
-DumpProj(void)
-{
-    A_Err                 err     = A_Err_NONE,
-    err2     = A_Err_NONE;
-    FILE                 *out     = NULL;
-    AEGP_ProjectH        projH    = NULL;
-    AEGP_ItemH            itemH     = NULL;
-    A_char                proj_nameAC[AEGP_MAX_PROJ_NAME_SIZE];
-    A_char                path_nameAC[AEGP_MAX_PROJ_NAME_SIZE + 16];        // so we can add "_Dump.txt"
-    AEGP_SuiteHandler    suites(sP);
-#ifdef AE_OS_WIN
-    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "C:\\Windows\\Temp\\");
-#elif defined AE_OS_MAC
-    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "./");
-#endif
-    ERR(suites.UtilitySuite3()->AEGP_StartUndoGroup("Keepin' On"));
-    
-    if (!err) {
-        ERR(suites.ProjSuite5()->AEGP_GetProjectByIndex(0, &projH));
-        ERR(suites.ProjSuite5()->AEGP_GetProjectRootFolder(projH, &itemH));
-        
-        if (!err && itemH) {
-            err = suites.ProjSuite5()->AEGP_GetProjectName(projH, proj_nameAC);
-            strcat(path_nameAC, proj_nameAC);
-            strcat(path_nameAC, "_Dump.txt");
-            if (!err) {
-                out = fopen(path_nameAC, "w");
-                if (out) {
-                    AEGP_ItemH            prev_itemH = 0;
-                    
-                    err = RecursiveDump(out, 0, itemH, 0, &prev_itemH);
-                    
-                    fprintf(out, "\n\n");
-                    fclose(out);
-                }
-            }
-        }
-    }
-    ERR2(suites.UtilitySuite3()->AEGP_EndUndoGroup());
-    
-    if (!err)
-    {
-#ifdef AE_OS_WIN
-        suites.UtilitySuite5()->AEGP_ReportInfo(S_my_id, DUMP_SUCCEEDED_WIN);
-#elif defined AE_OS_MAC
-        suites.UtilitySuite5()->AEGP_ReportInfo(S_my_id, DUMP_SUCCEEDED_MAC);
-#endif
-    }
-    else
-    {
-        suites.UtilitySuite5()->AEGP_ReportInfo(S_my_id, DUMP_FAILED);
-    }
-    
-    return err;
-}
-
-
 // Function to convert and copy string literals to A_UTF16Char.
 // On Win: Pass the input directly to the output
 // On Mac: All conversion happens through the CFString format
@@ -795,6 +663,71 @@ copyConvertStringLiteralIntoUTF16(
     size_t length = wcslen(inputString);
     wcscpy_s(reinterpret_cast<wchar_t*>(destination), length + 1, inputString);
 #endif
+}
+
+static A_Err
+DumpProj(void)
+{
+    A_Err                 err     = A_Err_NONE,
+    err2     = A_Err_NONE;
+    FILE                 *out     = NULL;
+    AEGP_ProjectH        projH    = NULL;
+    AEGP_ItemH            itemH     = NULL;
+    A_char                proj_nameAC[AEGP_MAX_PROJ_NAME_SIZE];
+    A_char                path_nameAC[AEGP_MAX_PROJ_NAME_SIZE + 16];        // so we can add "_Dump.txt"
+    A_UTF16Char           path_nameAC_utf16[AEGP_MAX_PATH_SIZE + 16];
+    
+    AEGP_SuiteHandler    suites(sP);
+#ifdef AE_OS_WIN
+    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "C:\\Windows\\Temp\\");
+#elif defined AE_OS_MAC
+    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "./");
+#endif
+    ERR(suites.UtilitySuite3()->AEGP_StartUndoGroup("Keepin' On"));
+    
+    if (!err) {
+        ERR(suites.ProjSuite5()->AEGP_GetProjectByIndex(0, &projH));
+        ERR(suites.ProjSuite5()->AEGP_GetProjectRootFolder(projH, &itemH));
+        
+        if (!err && itemH) {
+            err = suites.ProjSuite5()->AEGP_GetProjectName(projH, proj_nameAC);
+            strcat(path_nameAC, proj_nameAC);
+            strcat(path_nameAC, "_Dump.txt");
+            
+            copyANSIStringIntoUTF16(path_nameAC, path_nameAC_utf16, kCFStringEncodingGB_18030_2000);
+            int length = getUTF16StringLength(path_nameAC_utf16);
+            NSString *string = [NSString stringWithCharacters:path_nameAC_utf16 length:length];
+            const char * filename = [string cStringUsingEncoding:NSUTF8StringEncoding];
+            
+            if (!err) {
+                out = fopen(filename, "w");
+                if (out) {
+                    AEGP_ItemH            prev_itemH = 0;
+                    
+                    err = RecursiveDump(out, 0, itemH, 0, &prev_itemH);
+                    
+                    fprintf(out, "\n\n");
+                    fclose(out);
+                }
+            }
+        }
+    }
+    ERR2(suites.UtilitySuite3()->AEGP_EndUndoGroup());
+    
+    if (!err)
+    {
+#ifdef AE_OS_WIN
+        suites.UtilitySuite5()->AEGP_ReportInfo(S_my_id, DUMP_SUCCEEDED_WIN);
+#elif defined AE_OS_MAC
+        suites.UtilitySuite5()->AEGP_ReportInfo(S_my_id, DUMP_SUCCEEDED_MAC);
+#endif
+    }
+    else
+    {
+        suites.UtilitySuite5()->AEGP_ReportInfo(S_my_id, DUMP_FAILED);
+    }
+    
+    return err;
 }
 
 
