@@ -459,7 +459,7 @@ DumpComp(
 #ifdef AE_OS_WIN
     suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "C:\\Windows\\Temp\\");
 #elif defined AE_OS_MAC
-    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "./");
+    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "/tmp/");
 #endif
     strcat(path_nameAC, item_nameAC);
     strcat(path_nameAC, "_Dump.txt");
@@ -701,7 +701,7 @@ DumpProj(void)
 #ifdef AE_OS_WIN
     suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "C:\\Windows\\Temp\\");
 #elif defined AE_OS_MAC
-    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "./");
+    suites.ANSICallbacksSuite1()->strcpy(path_nameAC, "/tmp/");
 #endif
     ERR(suites.UtilitySuite3()->AEGP_StartUndoGroup("Keepin' On"));
     
